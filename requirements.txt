@@ -1,2 +1,5 @@
    pyTelegramBotAPI
    APScheduler
+pyTelegramBotAPI
+APScheduler
+flask
