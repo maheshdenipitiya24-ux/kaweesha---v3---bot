@@ -1,19 +1,19 @@
 import telebot
 import json
 import os
+import threading
 from datetime import datetime
 from apscheduler.schedulers.background import BackgroundScheduler
+from flask import Flask
 
-TOKEN = "8611297717:AAHUIU0VMi8gzxQ4NunTR-N1Te4lTVDYzZs"
+TOKEN = "8611297717:AAHUIU0VMi8gzxQ4NunTR-N1Te4lTVDYzZs" # <-- මේක අනිවාර්යයෙන්ම දාපන්
 bot = telebot.TeleBot(TOKEN)
-scheduler = BackgroundScheduler(timezone="Asia/Colombo") # Sri Lanka Time
+scheduler = BackgroundScheduler(timezone="Asia/Colombo")
 scheduler.start()
 
 DATA_FILE = "bot_data.json"
 
-# ========== සම්පූර්ණ සතියේ TIME TABLE එක ==========
 TIMETABLE = {
-    # සඳුදා, බදාදා, බ්‍රහස්පතින්දා, සිකුරාදා - Deep Work Days
     "mon": {
         "04:30": "Wake Up - වතුර 500ml + Stretch",
         "05:00": "Deep Work 1 - Biology: අමාරුම Unit එක, Past Paper 1.5h + Theory 1h",
@@ -26,22 +26,16 @@ TIMETABLE = {
         "19:30": "Active Recall - 3ම Subject: අද කරපු ටික කටින් කියනවා/ලියනවා",
         "21:30": "Cool Down - හෙට Plan එක"
     },
-    "wed": "mon", # බදාදා = සඳුදා වගේම
-    "thu": "mon", # බ්‍රහස්පතින්දා = සඳුදා වගේම
-    "fri": "mon", # සිකුරාදා = සඳුදා වගේම
-    
-    # අඟහරුවාදා - Speed Class Day
+    "wed": "mon", "thu": "mon", "fri": "mon",
     "tue": {
         "04:30": "Deep Work 1 - Chemistry: Organic අමාරුම කොටස",
         "07:30": "කෑම + Rest",
         "08:30": "Deep Work 2 - Biology: Theory 2h + Past Paper 1h",
-        "11:30": "නිදාගන්න / කෑම / Pre-Study - Speed Class එකට කලින් සූදානම් වෙනවා",
+        "11:30": "නිදාගන්න / කෑම / Pre-Study - Speed Class එකට සූදානම් වෙනවා",
         "17:00": "SPEED CLASS - 3h Tuition",
         "20:00": "Deep Work 3 - Physics + Speed Class Revision",
         "22:00": "නිදාගන්නවා"
     },
-    
-    # සෙනසුරාදා - Chemistry Class Day
     "sat": {
         "04:30": "Deep Work 1 - Biology Full Paper: වෙලාවට තියලා Paper 1ක්",
         "07:30": "කෑම + ලැස්ති වෙනවා",
@@ -50,8 +44,6 @@ TIMETABLE = {
         "17:00": "Family Time - පොතක් අතින් අල්ලන්න එපා",
         "22:00": "නිදාගන්නවා"
     },
-    
-    # ඉරිදා - Bio + Physics Class Day
     "sun": {
         "04:30": "Deep Work 1 - Chemistry: සෙනසුරාදා Class එකේ 100% Revision + MCQ 40ක්",
         "07:30": "කෑම + ලැස්ති වෙනවා",
@@ -64,7 +56,6 @@ TIMETABLE = {
         "22:00": "නිදාගන්නවා"
     }
 }
-# ================================================================
 
 def load_data():
     if os.path.exists(DATA_FILE):
@@ -80,22 +71,15 @@ data = load_data()
 
 def setup_tt_reminders():
     for day, schedule in TIMETABLE.items():
-        if isinstance(schedule, str): continue # mon, wed, thu, fri duplicate skip
+        if isinstance(schedule, str): continue
         for time_str, task in schedule.items():
             hour, minute = map(int, time_str.split(':'))
-            scheduler.add_job(
-                send_tt_reminder,
-                'cron',
-                day_of_week=day,
-                hour=hour,
-                minute=minute,
-                args=[task]
-            )
+            scheduler.add_job(send_tt_reminder, 'cron', day_of_week=day, hour=hour, minute=minute, args=[task])
 
 def send_tt_reminder(task):
     for chat_id in data["chat_ids"]:
         try:
-            bot.send_message(chat_id, f"🔔 **Kaweesha v3.0 Alert** 🔔\n\n{task}\n\nදැන් පටන් ගනින්. වෙලාව රත්තරන්!")
+            bot.send_message(chat_id, f"🔔 **Kaweesha v3.0 Alert** 🔔\n\n{task}\n\nදැන් පටන් ගනින්!")
         except: pass
 
 setup_tt_reminders()
@@ -120,17 +104,15 @@ def handle_message(message):
     day_map = {0: "mon", 1: "tue", 2: "wed", 3: "thu", 4: "fri", 5: "sat", 6: "sun"}
     today_key = day_map[datetime.now().weekday()]
     schedule_today = TIMETABLE[today_key]
-    if isinstance(schedule_today, str): # mon,wed,thu,fri case
+    if isinstance(schedule_today, str):
         schedule_today = TIMETABLE[schedule_today]
 
-    # HW Add
     if text.startswith("hw add "):
         task = text[7:]
         data["homework"].append({"task": task, "chat_id": chat_id, "added": datetime.now().strftime("%m-%d")})
         save_data(data)
         bot.reply_to(message, f"📚 HW එක දැම්මා: {task}")
 
-    # HW List
     elif text == "hw list":
         my_hw = [h for h in data["homework"] if h["chat_id"] == chat_id]
         if not my_hw:
@@ -141,7 +123,6 @@ def handle_message(message):
                 reply += f"{i}. {h['task']} - `{h['added']}`\n"
             bot.reply_to(message, reply, parse_mode='Markdown')
 
-    # HW Done
     elif text.startswith("hw done "):
         try:
             index = int(text[8:]) - 1
@@ -156,7 +137,6 @@ def handle_message(message):
         except:
             bot.reply_to(message, "`hw done 1` වගේ Number එක දාපන්")
 
-    # Time Table Today
     elif text == "tt today":
         day_name = ["සඳුදා", "අඟහරුවාදා", "බදාදා", "බ්‍රහස්පතින්දා", "සිකුරාදා", "සෙනසුරාදා", "ඉරිදා"][datetime.now().weekday()]
         reply = f"🗓️ **අද {day_name} - Kaweesha v3.0 Plan:**\n"
@@ -164,7 +144,6 @@ def handle_message(message):
             reply += f"`{time_str}` - {task}\n"
         bot.reply_to(message, reply, parse_mode='Markdown')
 
-    # Time Table Now
     elif text == "tt now":
         now = datetime.now().strftime("%H:%M")
         current_task = "Free Time / ඊලඟ Task එකට ලෑස්ති වෙයන්"
@@ -177,5 +156,21 @@ def handle_message(message):
     else:
         bot.reply_to(message, "Command එක තේරුනේ නෑ. `/start` ගහලා බලපන්")
 
-print("Kaweesha v3.0 Bot Started...")
-bot.infinity_polling()
+# Flask + Bot දෙකම එකට දුවවන Part එක
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "Kaweesha v3.0 Bot is Alive!"
+
+def run_bot():
+    print("Kaweesha v3.0 Bot Started...")
+    bot.infinity_polling()
+
+def run_flask():
+    port = int(os.environ.get('PORT', 10000))
+    app.run(host='0.0.0.0', port=port)
+
+if __name__ == "__main__":
+    threading.Thread(target=run_bot).start()
+    run_flask()
